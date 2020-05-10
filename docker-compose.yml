@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  jenkins:
+    image: "jcmds/jenkins:2.235"
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+    labels:
+      NAME: "jenkins"
+    volumes:
+      - ./data/jobs:/var/jenkins_home/jobs
+      - ./data/m2deps:/var/jenkins_home/.m2/repository

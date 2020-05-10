@@ -1,0 +1,110 @@
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+---  
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins
+  namespace: dev
+  labels:
+    app: jenkins-rbac
+    tier: app
+    version: v1
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: dev
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---  
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: dev
+  name: jenkins-api
+  labels:
+    app: jenkins
+    tier: app
+    version: v1  
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: jenkins
+    tier: app
+    version: v1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: dev
+  name: jenkins-dep
+  labels:
+    app: jenkins
+    tier: app
+    version: v1  
+spec:
+  selector:
+    matchLabels:
+      app: jenkins
+      tier: app
+      version: v1  
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: jenkins
+        tier: app
+        version: v1  
+    spec:
+      containers:
+        - name: jenkins-deployment
+          image: jcmds/jenkins:2.235
+          env:
+            - name: JAVA_OPTS
+              value: -Djenkins.install.runSetupWizard=false
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MY_POD_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            - name: JENKINS_SERVER_URL
+              value: http://$MY_POD_IP:8080
+          ports:
+            - name: http-port
+              containerPort: 8080
+            - name: jnlp-port
+              containerPort: 50000
+          resources:
+            requests:
+              cpu: 25m
+              memory: 200Mi
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
