@@ -14,6 +14,5 @@ def addGlobalEnvVariable(Class jenkins, String key, String value) {
   } else {
       envVarsNodePropertyList.get(0).getEnvVars().put(key, value)
   }
-  println ">>> added global environment variable ${key} = ${value}"
   instance.save()
 }
