@@ -2,7 +2,7 @@ kubernetes:1.25.4
 docker-commons:1.16
 docker-workflow:1.23
 git:4.2.2
-blueocean:1.19.0
+blueocean:1.23.1
 credentials-binding:1.22
 credentials:2.3.7
 webhook-step:1.4
@@ -22,3 +22,4 @@ sse-gateway:1.23
 ssh-agent:1.19
 ssh-credentials:1.18.1
 ssh-slaves:1.31.2
+variables-replace-plugin:1.0.0
