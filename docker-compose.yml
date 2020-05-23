@@ -3,7 +3,7 @@ services:
   jenkins:
       build:
         context: .
-      image: jcmds/jenkins:4  
+      image: jcmds/jenkins:2.237
       container_name: jenkins
       ports:
         - "8080:8080"

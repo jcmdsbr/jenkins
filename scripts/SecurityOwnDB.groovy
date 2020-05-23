@@ -1,28 +1,34 @@
+
 import java.lang.System
 import jenkins.model.*
 import hudson.security.*
 import hudson.model.*
 
-def home_dir = System.getenv("JENKINS_HOME")
-def properties = new ConfigSlurper().parse(new File("$home_dir/config/authentication.properties").toURI().toURL())
+def HOME = System.getenv('JENKINS_HOME')
+def properties = new ConfigSlurper().parse(new File("$HOME/config/authentication.properties").toURI().toURL())
 
-if(properties.owndb.enabled) {
+if (properties.owndb.enabled) {
+    def realm = new HudsonPrivateSecurityRealm(false)
+    def strategy = new GlobalMatrixAuthorizationStrategy()
+    
+    properties.owndb.users.each { key, value ->
+        def passwordFile = new File(value.path)
+        realm.createAccount(value.userId, passwordFile.text.trim())
+        if (value.isAdmin == true) {
+            strategy.add(Jenkins.ADMINISTER, value.userId)
+        } else {
+            strategy.add(Jenkins.READ, value.userId)
+        }
+    }
 
-  HudsonPrivateSecurityRealm realm = new HudsonPrivateSecurityRealm(false)
-  properties.owndb.users.each() { key, value ->
-    File passwordFile = new File(value.path)
-    realm.createAccount(value.userId, passwordFile.text.trim())
-  }
-
-  Jenkins.instance.setSecurityRealm(realm)
-  Jenkins.instance.save()
-
-  Descriptor dslSecurity = Jenkins.instance.getDescriptor('javaposse.jobdsl.plugin.GlobalJobDslSecurityConfiguration')
- 
-  if(dslSecurity != null) {
-    dslSecurity.setUseScriptSecurity(false)
+    Jenkins.instance.setAuthorizationStrategy(strategy)
+    Jenkins.instance.setSecurityRealm(realm)
     Jenkins.instance.save()
-  }
 
+    def dslSecurity = Jenkins.instance.getDescriptor('javaposse.jobdsl.plugin.GlobalJobDslSecurityConfiguration')
+
+    if (dslSecurity != null) {
+        dslSecurity.setUseScriptSecurity(false)
+        Jenkins.instance.save()
+    }
 }
- 
