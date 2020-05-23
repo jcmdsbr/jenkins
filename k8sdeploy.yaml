@@ -1,85 +1,48 @@
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: jenkins
-  namespace: default
-subjects:
-  - kind: ServiceAccount
-    name: default
-    namespace: default
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
----
-# kind: StorageClass
-# apiVersion: storage.k8s.io/v1
-# metadata:
-#   name: local-storage
-#   namespace: default
-# provisioner: kubernetes.io/no-provisioner
-# volumeBindingMode: WaitForFirstConsumer
-# --- 
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   name: jenkins-vol
-#   namespace: default
-# spec:
-#   storageClassName: local-storage
-#   accessModes:
-#     - ReadWriteOnce
-#   resources:
-#     requests:
-#       storage: 1Gi
-# --- 
 apiVersion: v1
 kind: Service
 metadata:
   name: jenkins-svc
-  namespace: default
   labels:
-    app: jenkins
-    tier: app
+    app: jks
+    tier: devops
     version: v1  
 spec:
   type: NodePort
   ports:
-    - port: 8080
+    - port: 80
       targetPort: 8080
   selector:
-    app: jenkins
-    tier: app
+    app: jks
+    tier: devops
     version: v1
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jenkins-dep
-  namespace: default
   labels:
-    app: jenkins
-    tier: app
+    app: jks
+    tier: devops
     version: v1  
 spec:
   selector:
     matchLabels:
-      app: jenkins
-      tier: app
+      app: jks
+      tier: devops
       version: v1  
   replicas: 1
   template:
     metadata:
       labels:
-        app: jenkins
-        tier: app
+        app: jks
+        tier: devops
         version: v1  
     spec:
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 20
       restartPolicy: Always
       containers:
         - name: jenkins-master
-          image: jcmds/jenkins:2.236
+          image: jcmds/jenkins:2.237
           env:
             - name: JAVA_OPTS
               value: -Djenkins.install.runSetupWizard=false
@@ -106,22 +69,28 @@ spec:
             - name: JENKINS_SERVER_URL
               value: http://$MY_POD_IP:8080
           ports:
-            - name: http-port
-              containerPort: 8080
-            - name: jnlp-port
-              containerPort: 50000
-          # volumeMounts:
-          #   - name: jenkins-vol
-          #     mountPath: /var/jenkins_home   
+            - containerPort: 8080
+            - containerPort: 50000
+          volumeMounts:
+            - name: jenkins_home_job
+              mountPath: /var/jenkins_home/jobs      
           resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
             requests:
-              cpu: 25m
-              memory: 200Mi
+              cpu: "25m"
+              memory: "256Mi"
           imagePullPolicy: IfNotPresent
-      # volumes:
-      #   - name: jenkins-vol
-      #     persistentVolumeClaim:
-      #       claimName: jenkins-vol   
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        fsGroup: 2000        
+      volumes:
+      - name: jenkins_home_job
+        hostPath:
+          path: /host_mnt/d/docker/jenkins-jobs
+          type: DirectoryOrCreate 
   strategy:
     type: RollingUpdate
     rollingUpdate:

@@ -1,0 +1,99 @@
+// Jenkins pipeline from a deployed inside k8s cluster with multiple environments separated by namespace
+pipeline {
+  // Agent configuration
+  agent {
+    kubernetes {
+      cloud "kubernetes"
+      label "agent"
+      yamlFile "jdp/agent.yaml"
+    }
+  }
+  // Trigger in GIT repo
+  triggers {
+    pollSCM("H/5 * * * *")
+  }
+  stages {
+    // Stage 1 : Build and Push the Docker image into the registry
+    stage("BuildAndPush") {
+      when { branch "develop" }
+      environment {
+        IMAGE = "IMAGE_NAME"
+        DATE = sh(returnStdout: true, script: "date +%Y%m%d").trim()
+        REGISTRY_CREDENTIALS = credentials("DOCKER_REGISTRY")
+        REGISTRY_URL = "REGISTRY_URL"
+      }
+      steps {
+        script {
+          env.IMAGE_TAG = "${DATE}.${BUILD_NUMBER}"
+        }
+        container("docker") {
+          dir("src") {
+            stash includes: "k8s.yaml", name: "k8s"
+            sh "docker login $REGISTRY_URL -u $REGISTRY_CREDENTIALS_USR -p $REGISTRY_CREDENTIALS_PSW"
+            sh "docker build -t $IMAGE:$IMAGE_TAG ."
+            sh "docker tag $IMAGE:$IMAGE_TAG  $REGISTRY_URL/$IMAGE:$IMAGE_TAG"
+            sh "docker push $REGISTRY_URL/$IMAGE:$IMAGE_TAG"
+          }
+        }
+      }
+    }
+    // Stage 2 : Deploy in Dev environment
+    stage("DEV") {
+      environment{
+        namespace = "dev"
+      }
+      steps {
+        script {
+          env.tokenizer = getTokenizer(env.namespace) // Tokenizer environments variables
+        }
+        container("kubectl") {
+          dir("drop/dev") {
+            unstash "k8s" // Replace variables in k8s yaml
+            sh "$tokenizer sed -i s,___BUILD.NUMBER___,$IMAGE_TAG,g k8s.yaml"
+            sh "sed -i s,___environment___,$namespace,g k8s.yaml"
+            sh "kubectl apply -f k8s.yaml" 
+          }
+        }
+      }
+    }
+    // Stage 3: Deploy in  QA environment
+    stage("QA") {
+      // Set permission to deploy from a submitter 
+      input {
+        message "Should we continue?"
+        ok "Yes"
+        submitter "admin"
+      }
+      environment{
+        namespace = "qa"
+      }
+      steps {
+        script {
+          env.tokenizer = getTokenizer(env.namespace)
+        }
+        container("kubectl") {
+          dir("drop/qa") {
+            unstash "k8s" // Replace variables in k8s yaml
+            sh "$tokenizer sed -i s,___BUILD.NUMBER___,$IMAGE_TAG,g k8s.yaml"
+            sh "sed -i s,___environment___,$namespace,g k8s.yaml"
+            sh "kubectl apply -f k8s.yaml" 
+          }
+        }
+      }
+    }
+  }
+}
+
+// Create a sed command from all variables by environments
+@NonCPS
+def getTokenizer(namespace) {
+  def cmd = ""
+  def fields = env.getEnvironment()
+  fields.each { key, value -> 
+    if(key.contains(namespace)) {
+      key = key.replaceAll("${namespace}_","");
+      cmd += " sed -i s,___${key}___," + "'" + value + "'" + ",g k8s.yaml && ";
+    }
+  }
+  return cmd;
+}
