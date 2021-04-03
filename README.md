@@ -27,7 +27,7 @@ Change version in docker compose file
     - docker-compose -f "docker-compose.yml" up -d --build  --no-cache
 ```
  - To Stop:
- - 
+ 
 ```sh 
     - docker-compose -f "docker-compose.yml" down
 ```
